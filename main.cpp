@@ -4,6 +4,8 @@
 #include <bits/stdc++.h>
 using namespace std;
 
+
+
 // create an empty grid of 0s
 vector<vector<int>> createGrid(int rows, int cols) {
     return vector<vector<int>>(rows, vector<int>(cols, 0));
@@ -119,13 +121,72 @@ void printMap(const vector<vector<int>>& grid) {
     }
 }
 
-int main() {
-    int rows, cols;
-    cout << "map size? (rows cols): ";
-    cin >> rows >> cols;
 
-    auto [grid, regionNames] = makeRegion(rows, cols);
-    printRegionInfo(grid, regionNames);
-    printMap(grid);
+bool mapExists(const string& path) {
+    ifstream fin(path);
+    return fin.good();  
+}
+
+bool askUserSatisfied(){
+	string ans;
+	cout << " are you satisfied with the map ? (y/n) " << endl;
+	cin >> ans;
+	return ans == "y" || ans == "Y" ;
+}
+
+bool saveMap(const string& path,const vector<vector<int>>& grid, const unordered_map<int,string>& regionNames){
+	ofstream fout(path);
+	if (!fout) return false;
+
+	int rows = grid.size();
+	int cols = grid[0].size();
+	fout << rows << " " << cols << "\n";
+
+	for (const auto& row : grid ){
+		for (int cell : row ){
+			fout << cell << " ";
+		}
+		fout << "\n";
+	}
+
+	for (const auto& [id,name] : regionNames ){
+		fout << id << ":" << name << "\n";
+	}
+
+	fout.close();
+	return true;
+}
+
+int main() {
+    std::filesystem::create_directories("data");
+    string map_path = "data/map.txt";
+
+    if (!mapExists(map_path)) {
+        cout << "no map found... entering creation loop\n";
+        int rows, cols;
+        cout << "map size? (rows cols): ";
+        cin >> rows >> cols;
+
+        while (true) {
+            auto [grid, regionNames] = makeRegion(rows, cols);
+            printRegionInfo(grid, regionNames);
+            printMap(grid);
+
+	if (askUserSatisfied()) {
+    		if (saveMap(map_path, grid, regionNames)) {
+        		cout << "map saved to " << map_path << "\n";
+        		break;
+    		} else {
+        		cerr << "failed to save map!\n";
+    		}
+	}
+            cout << "\n--- remaking map ---\n";
+        }
+    } else {
+        cout << "map found... loading\n";
+        // TODO: loadMap(map_path, grid, regionNames);
+    }
+
+    return 0;
 }
 

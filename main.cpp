@@ -157,6 +157,41 @@ bool saveMap(const string& path,const vector<vector<int>>& grid, const unordered
 	return true;
 }
 
+void loadMap(const string& path, int& rows,int& cols){
+	cout << " ====== NOW LOADING =====" << endl;
+	cout << " ||||| " << path << " ||||| " << endl;
+
+	ifstream fin(path);
+	if (!fin){
+		cerr << " failed to open file " << endl;
+		return;
+	}
+	fin >> rows >> cols;
+	if (fin.fail()){
+		cerr << " failed to read data, possible corruption " << endl;
+		return;
+	}
+	if (rows<=0 || cols <=0){
+		cerr << " bad dimensions , delete the map file at " << path << " and restart " << endl;
+	}
+	
+	vector<vector<int>> grid(rows, vector<int>(cols));
+
+	for (int i = 0; i < rows; i++) {
+	    for (int j = 0; j < cols; j++) {
+	        fin >> grid[i][j];
+	    }
+	}
+
+	for (int i = 0; i < rows; i++) {
+	    for (int j = 0; j < cols; j++) {
+	        cout << grid[i][j] << " ";
+	    }
+	    cout << endl;
+	}
+	
+}
+
 int main() {
     std::filesystem::create_directories("data");
     string map_path = "data/map.txt";
@@ -183,8 +218,9 @@ int main() {
             cout << "\n--- remaking map ---\n";
         }
     } else {
+	int rows = 0,cols=0;
         cout << "map found... loading\n";
-        // TODO: loadMap(map_path, grid, regionNames);
+        loadMap(map_path,rows,cols);
     }
 
     return 0;

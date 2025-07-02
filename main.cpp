@@ -242,7 +242,6 @@ void loadMap(const string& path, int& rows, int& cols, vector<vector<int>>& grid
     }
 }
 
-
 struct derivedUnit {
     int id;  // unique id
     string name;
@@ -258,97 +257,92 @@ void distributeResource(vector<Cell>& cells) {
     string resource_path = "data/resources.txt";
     
     unordered_map<int, string> primaryResources = {
-    	{1, "oil"},         
-	{2, "metal"},       
-	{3, "gold"},        
-	{4, "rare_earth"},  
-	{5, "uranium"}      
+        {1, "oil"},         
+        {2, "metal"},       
+        {3, "gold"},        
+        {4, "rare_earth"},  
+        {5, "uranium"}      
     };
 
-    /*
-derived units table [ format: { id thing primaryresources derivedunit_ifneeded turnsneeded } ]
-
-101. outpost ( 10 oil , 2 metal ) 1                          // forward base to deploy troops, basic requirement for ground stuff
-102. 10 mercenaries ( 2 oil , 1 outpost ) 3                 // cheap, fast disposable troops
-103. 10 police ( 5 metal , 1 outpost ) 4                    // basic defensive garrison
-104. 10 light_army_personnel ( 5 oil , 5 metal , 1 outpost ) 5  // light soldiers for offense or defense
-105. 10 medium_army_personnel ( 8 oil , 8 metal , 1 outpost ) 5 // tougher infantry
-106. 10 large_army_personnel ( 10 oil , 10 metal , 1 gold , 1 outpost ) 8 // heavy infantry squads
-107. garage ( 12 oil , 15 metal , 1 outpost ) 2             // unlocks vehicle production
-108. 5 pickup_truck ( 20 oil , 12 metal , 1 garage ) 3      // light, fast support vehicles
-109. 3 light_tank ( 30 oil , 20 metal , 10 pickup_truck + 1 garage ) 2 // basic armored vehicle
-110. 3 heavy_tank ( 45 oil , 50 metal , 25 pickup_truck + 1 garage ) 5 // big boi tank
-111. 1 anti_air ( 20 oil , 10 metal , 1 light_tank + 10 light_army_personnel + 1 garage ) 4 // air defense
-112. 1 airbase ( 50 oil , 50 metal , 3 gold , 1 garage + 1 anti_air ) 8 // unlocks aircraft
-113. 1 a2a_plane ( 60 oil , 60 metal , 1 airbase ) 5        // fighter jet for air superiority
-114. 1 small_bomber_plane ( 70 oil , 60 metal , 1 airbase ) 5 // tactical bomber
-115. 1 super_bomber_plane ( 100 oil , 80 metal , 7 gold , 1 small_bomber_plane + 1 airbase ) 7 // big strategic bomber
-116. 1 rocket ( 20 oil , 10 metal , 1 gold , 1 airbase ) 2  // basic ballistic missile
-117. 1 missile ( 40 oil , 25 metal , 10 rare_earth , 1 rocket + 1 airbase ) 10 // upgraded missile
-118. 1 nuke ( 1000 oil , 999 metal , 100 rare_earth , 500 uranium , 10 missile + 10 large_army_personnel + 1 airbase + 2 super_bomber_plane ) 34 // final wmd
-
-// new extra units
-
-119. artillery_battery ( 60 oil , 70 metal , 5 gold , 1 garage + 10 medium_army_personnel ) 6
-    // long-range ground bombardment unit
-
-120. mobile_sam ( 50 oil , 40 metal , 2 gold , 5 light_tank + 1 garage ) 5
-    // mobile anti-air defense, can move with ground forces
-
-121. commando_squad ( 20 oil , 30 metal , 3 gold , 1 outpost ) 4
-    // stealthy, specialized infiltration or sabotage missions
-
-122. drone_swarm ( 40 oil , 25 metal , 2 gold , 1 airbase ) 3
-    // cheap, fast harassment or recon attack units
-
-123. heavy_mech ( 80 oil , 120 metal , 10 gold , 3 heavy_tank + 1 garage ) 9
-    // giant armored walker-type ground dominance unit
-
-124. fortified_bunker ( 50 metal , 20 oil , 1 outpost ) 4
-    // strong static defense, high garrison capacity
-
-125. mobile_hq ( 90 oil , 80 metal , 5 gold , 1 outpost + 1 garage ) 7
-    // deployable base, allows forward production and command
-
-126. orbital_strike_sat ( 200 oil , 150 metal , 50 rare_earth , 10 gold , 1 airbase ) 12
-    // global strike from orbit, very high cost, big payoff
-
-127. chemical_warhead ( 80 oil , 50 metal , 20 rare_earth , 2 rocket + 1 airbase ) 8
-    // area denial or mass infantry damage, weaker than nuke but faster
-
-128. emp_generator ( 60 oil , 70 metal , 15 rare_earth , 1 airbase + 1 anti_air ) 9
-    // disables vehicles/air units in region temporarily
-
-129. armored_truck ( 40 oil , 45 metal , 1 garage + 5 pickup_truck ) 3
-    // tougher logistics or troop transport
-
-130. railgun_platform ( 150 oil , 200 metal , 15 gold , 1 garage + 1 airbase ) 14
-    // ultra-long-range precision strike ground weapon
-
-131. stealth_bomber ( 120 oil , 100 metal , 5 gold , 1 airbase + 1 small_bomber_plane ) 7
-    // bypasses defenses, ideal for deep strikes
-
-132. shock_trooper_unit ( 25 oil , 35 metal , 5 gold , 1 outpost + 1 commando_squad ) 5
-    // elite infantry, strong vs other infantry and fortified positions
-*/
-
-
-    
-    derivedUnit tankUnit = {
-	101, 
-	"tanks",
-	500,
-	80,
-	{{1, 50}, {2, 100}},  // oil:50, metal:100
-	{{102, 2}}            // 2 light vehicles needed
+    // All derived units based on your specifications
+    vector<derivedUnit> allUnits = {
+        // Basic infrastructure
+        {101, "outpost", 500, 0, {{1, 10}, {2, 2}}, {}, 1},
+        
+        // Infantry units
+        {102, "mercenaries", 100, 10, {{1, 2}}, {{101, 1}}, 3},
+        {103, "police", 120, 15, {{2, 5}}, {{101, 1}}, 4},
+        {104, "light_army_personnel", 150, 20, {{1, 5}, {2, 5}}, {{101, 1}}, 5},
+        {105, "medium_army_personnel", 200, 30, {{1, 8}, {2, 8}}, {{101, 1}}, 5},
+        {106, "large_army_personnel", 280, 45, {{1, 10}, {2, 10}, {3, 1}}, {{101, 1}}, 8},
+        
+        // Vehicle infrastructure and units
+        {107, "garage", 400, 0, {{1, 12}, {2, 15}}, {{101, 1}}, 2},
+        {108, "pickup_truck", 80, 12, {{1, 20}, {2, 12}}, {{107, 1}}, 3},
+        {109, "light_tank", 300, 60, {{1, 30}, {2, 20}}, {{107, 1}, {108, 10}}, 2},
+        {110, "heavy_tank", 500, 100, {{1, 45}, {2, 50}}, {{107, 1}, {108, 25}}, 5},
+        
+        // Air defense and aviation
+        {111, "anti_air", 250, 40, {{1, 20}, {2, 10}}, {{107, 1}, {109, 1}, {104, 10}}, 4},
+        {112, "airbase", 800, 0, {{1, 50}, {2, 50}, {3, 3}}, {{107, 1}, {111, 1}}, 8},
+        {113, "a2a_plane", 200, 80, {{1, 60}, {2, 60}}, {{112, 1}}, 5},
+        {114, "small_bomber_plane", 250, 120, {{1, 70}, {2, 60}}, {{112, 1}}, 5},
+        {115, "super_bomber_plane", 400, 200, {{1, 100}, {2, 80}, {3, 7}}, {{112, 1}, {114, 1}}, 7},
+        
+        // Missiles and WMDs
+        {116, "rocket", 100, 50, {{1, 20}, {2, 10}, {3, 1}}, {{112, 1}}, 2},
+        {117, "missile", 150, 100, {{1, 40}, {2, 25}, {4, 10}}, {{112, 1}, {116, 1}}, 10},
+        {118, "nuke", 300, 2000, {{1, 1000}, {2, 999}, {4, 100}, {5, 500}}, {{112, 1}, {115, 2}, {106, 10}, {117, 10}}, 34},
+        
+        // Extended units
+        {119, "artillery_battery", 350, 90, {{1, 60}, {2, 70}, {3, 5}}, {{107, 1}, {105, 10}}, 6},
+        {120, "mobile_sam", 280, 45, {{1, 50}, {2, 40}, {3, 2}}, {{107, 1}, {109, 5}}, 5},
+        {121, "commando_squad", 80, 35, {{1, 20}, {2, 30}, {3, 3}}, {{101, 1}}, 4},
+        {122, "drone_swarm", 60, 25, {{1, 40}, {2, 25}, {3, 2}}, {{112, 1}}, 3},
+        {123, "heavy_mech", 700, 150, {{1, 80}, {2, 120}, {3, 10}}, {{107, 1}, {110, 3}}, 9},
+        {124, "fortified_bunker", 600, 10, {{1, 20}, {2, 50}}, {{101, 1}}, 4},
+        {125, "mobile_hq", 450, 5, {{1, 90}, {2, 80}, {3, 5}}, {{101, 1}, {107, 1}}, 7},
+        {126, "orbital_strike_sat", 200, 300, {{1, 200}, {2, 150}, {3, 10}, {4, 50}}, {{112, 1}}, 12},
+        {127, "chemical_warhead", 120, 150, {{1, 80}, {2, 50}, {4, 20}}, {{112, 1}, {116, 2}}, 8},
+        {128, "emp_generator", 300, 0, {{1, 60}, {2, 70}, {4, 15}}, {{112, 1}, {111, 1}}, 9},
+        {129, "armored_truck", 150, 20, {{1, 40}, {2, 45}}, {{107, 1}, {108, 5}}, 3},
+        {130, "railgun_platform", 400, 250, {{1, 150}, {2, 200}, {3, 15}}, {{107, 1}, {112, 1}}, 14},
+        {131, "stealth_bomber", 280, 140, {{1, 120}, {2, 100}, {3, 5}}, {{112, 1}, {114, 1}}, 7},
+        {132, "shock_trooper_unit", 180, 55, {{1, 25}, {2, 35}, {3, 5}}, {{101, 1}, {121, 1}}, 5}
     };
 
-
-
-    if (!mapExists(resource_path)){
-	cout << " looks like a first run ; distributing resources " << endl;
+    // Print all derived units
+    cout << "\n=== ALL DERIVED UNITS ===" << endl;
+    for (const auto& unit : allUnits) {
+        cout << "\nID: " << unit.id << " - " << unit.name << endl;
+        cout << "Health: " << unit.health << " | Damage: " << unit.damage << " | Build Time: " << unit.buildTime << " turns" << endl;
+        
+        cout << "Resources: ";
+        bool first = true;
+        for (const auto& [resId, qty] : unit.primaryResourcesNeeded) {
+            if (!first) cout << ", ";
+            cout << primaryResources.at(resId) << "(" << qty << ")";
+            first = false;
+        }
+        
+        if (!unit.derivedUnitsNeeded.empty()) {
+            cout << " | Prerequisites: ";
+            first = true;
+            for (const auto& [reqId, qty] : unit.derivedUnitsNeeded) {
+                if (!first) cout << ", ";
+                // Find the unit name by ID
+                auto it = find_if(allUnits.begin(), allUnits.end(), 
+                                [reqId](const derivedUnit& u) { return u.id == reqId; });
+                if (it != allUnits.end()) {
+                    cout << it->name << "(" << qty << ")";
+                }
+                first = false;
+            }
+        }
+        cout << endl;
     }
 }
+
 
 
 int main() {

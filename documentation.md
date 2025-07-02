@@ -1,6 +1,6 @@
-# Strategy Game Map Generator
+# Strategy Game Map Generator & Resource System
 
-This C++ program generates, displays, and saves a 2D game map composed of distinct, named regions. If a map file already exists, it loads the map data instead of generating a new one.
+This C++ program generates, displays, and saves a 2D game map composed of distinct, named regions. If a map file already exists, it loads the map data and displays a catalog of available in-game units.
 
 ## How to Compile and Run
 
@@ -28,23 +28,28 @@ To run the compiled program:
         *   If the user is satisfied, it saves the map to `data/map.txt` (`saveMap`) and exits the loop.
         *   If not, it regenerates the map.
     *   **If `data/map.txt` is found**:
-        *   It loads the map data from the file (`loadMap`).
-        *   It then calls `distributeResource`, which appears to be a placeholder or work-in-progress for assigning resources to the map cells.
+        *   It loads the map data from the file (`loadMap`), populating the grid and a vector of `Cell` objects.
+        *   It then calls `distributeResource`, which defines and displays a comprehensive list of all available military units, their stats, and their build requirements (resources and prerequisite units).
 
 ## Core Functions
 
 -   `main()`: The main entry point that orchestrates the program flow.
 -   `makeRegion(rows, cols)`: Generates a grid and populates it with randomly sized and positioned rectangular regions. Each region is assigned a unique ID and a random name from a predefined list.
--   `loadMap(...)`: Reads map dimensions, grid data, and region names from `data/map.txt`.
+-   `loadMap(...)`: Reads map dimensions, grid data, and region names from `data/map.txt`. It uses this data to populate the game's grid and a `vector<Cell>` containing detailed information for each cell.
 -   `saveMap(...)`: Writes the current map grid and region names to `data/map.txt`.
 -   `printMap(grid)`: Renders a color-coded ASCII representation of the map in the console.
 -   `printRegionInfo(...)`: Displays a summary of each region, including its ID, name, position, and size.
--   `distributeResource(cells)`: A function intended to handle the logic for placing resources on the map. It currently contains placeholder data structures for primary resources and derived military units.
+-   `distributeResource(cells)`: This function initializes data for the game's economy and military. It defines a list of primary resources (e.g., oil, metal) and a detailed catalog of `derivedUnit` structures. Each unit has stats (health, damage), build time, and resource/unit prerequisites. The function's current implementation prints this entire catalog to the console for review; it does not yet assign resources or units to the map itself.
 
 ## Data Structures
 
--   `struct Cell`: Represents a single cell on the map, containing its row, column, region ID, and region name.
--   `vector<vector<int>>`: A 2D vector used as the primary grid structure, where each integer represents a region ID (0 for unoccupied).
+-   `struct Cell`: Represents a single cell on the map, containing its row, column, region ID, and the corresponding region name.
+-   `struct derivedUnit`: Represents a military or infrastructure unit that can be built. It includes:
+    *   `id`: A unique identifier.
+    *   `name`: The unit's name.
+    *   `health`, `damage`, `buildTime`: Core stats for the unit.
+    *   `primaryResourcesNeeded`: A map of required primary resource IDs and the quantity needed.
+    *   `derivedUnitsNeeded`: A map of required prerequisite unit IDs and the quantity needed, establishing a tech tree.
 
 ## Map File Format (`data/map.txt`)
 

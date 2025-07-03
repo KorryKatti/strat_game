@@ -9,6 +9,8 @@ struct Cell {
 		int col;
 		int regionID;
 		string regionName;
+        int resourceID;
+        int productionRate;
 	};
 
 // create an empty grid of 0s
@@ -164,82 +166,64 @@ bool saveMap(const string& path,const vector<vector<int>>& grid, const unordered
 
 
 
-void loadMap(const string& path, int& rows, int& cols, vector<vector<int>>& grid, vector<Cell>& cells) {
-    cout << " ====== NOW LOADING =====" << endl;
-    cout << " ||||| " << path << " ||||| " << endl;
-
+bool loadMap(const string& path, int& rows, int& cols, vector<vector<int>>& grid, vector<Cell>& cells) {
     ifstream fin(path);
     if (!fin) {
-        cerr << " failed to open file " << endl;
-        return;
+        cerr << "Error: Could not open map file: " << path << endl;
+        return false;
     }
 
     fin >> rows >> cols;
-    if (fin.fail()) {
-        cerr << " failed to read data, possible corruption " << endl;
-        return;
-    }
-    if (rows <= 0 || cols <= 0) {
-        cerr << " bad dimensions , delete the map file at " << path << " and restart " << endl;
-        return;
+    if (fin.fail() || rows <= 0 || cols <= 0) {
+        cerr << "Error: Invalid or corrupt map dimensions in " << path << endl;
+        return false;
     }
 
-    grid.assign(rows, vector<int>(cols));  // ← use passed-in grid
+    grid.assign(rows, vector<int>(cols));
 
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
             fin >> grid[i][j];
-            cout << " found " << grid[i][j] << " at " << i << " " << j << endl;
+            if (fin.fail()) {
+                cerr << "Error: Corrupt map data at row " << i << ", col " << j << endl;
+                return false;
+            }
         }
     }
-
-    cout << " regions saved with their location , now printing map " << endl;
-    cout << "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n";
-    cout << " ======================================================= " << endl;
-    cout << "==================== WORLD MAP ===================== " << endl;
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            cout << grid[i][j] << " ";
-        }
-        cout << endl;
-    }
-
-    cout << "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n" << endl;
-    cout << " initializing regionId[s] and name[s] " << endl;
 
     unordered_map<int, string> regionMap;
-
     string line;
-    getline(fin, line); // skip leftover newline
-
+    // Use a loop that also checks for stream errors
     while (getline(fin, line)) {
         if (line.empty()) continue;
 
         size_t pos = line.find(":");
         if (pos == string::npos) {
-            cout << " bad format found " << endl;
+            cerr << "Warning: Malformed region line, skipping: " << line << endl;
             continue;
         }
 
-        cout << line << endl;
-
-        int id = stoi(line.substr(0, pos));
-        string name = line.substr(pos + 1);
-
-        regionMap[id] = name;
-        cout << name << endl;
+        try {
+            int id = stoi(line.substr(0, pos));
+            string name = line.substr(pos + 1);
+            regionMap[id] = name;
+        } catch (const std::exception& e) {
+            cerr << "Warning: Could not parse region line, skipping: " << line << endl;
+        }
     }
 
-    cells.clear(); // ← clear passed-in cells
+    cells.clear();
 
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
             int id = grid[i][j];
             string name = regionMap.count(id) ? regionMap[id] : "Unknown";
 
-            cells.push_back({i, j, id, name});
+            cells.push_back({i, j, id, name, 0, 0}); // Init resources to 0
         }
     }
+
+    return true;
 }
 
 struct derivedUnit {
@@ -253,9 +237,9 @@ struct derivedUnit {
 };
 
 void distributeResource(vector<Cell>& cells) {
-
     string resource_path = "data/resources.txt";
-    
+    if (!mapExists(resource_path)){
+
     unordered_map<int, string> primaryResources = {
         {1, "oil"},         
         {2, "metal"},       
@@ -263,6 +247,58 @@ void distributeResource(vector<Cell>& cells) {
         {4, "rare_earth"},  
         {5, "uranium"}      
     };
+
+    // --- Resource Distribution Logic ---
+    cout << "\n=== DISTRIBUTING RESOURCES RANDOMLY AND FAIRLY ===\n";
+
+    // 1. Group cells by their region ID for easier processing.
+    unordered_map<int, vector<Cell*>> cellsByRegion;
+    for (Cell& cell : cells) {
+        if (cell.regionID != 0) {
+            cellsByRegion[cell.regionID].push_back(&cell);
+        }
+    }
+
+    // 2. Set up our random number generators.
+    mt19937 rng(time(nullptr));
+    uniform_int_distribution<int> randProduction(1, 20);
+
+    // 3. Go through each region and assign its unique resources.
+    for (auto const& [regionID, regionCells] : cellsByRegion) {
+        // Create a list of all possible primary resource IDs.
+        vector<int> availableResources;
+        for (auto const& [resId, resName] : primaryResources) {
+            availableResources.push_back(resId);
+        }
+
+        // Shuffle the resources to make the assignment random.
+        shuffle(availableResources.begin(), availableResources.end(), rng);
+
+        // Deal one unique resource to each cell, until we run out of cells or resources.
+        for (size_t i = 0; i < regionCells.size() && i < availableResources.size(); ++i) {
+            Cell* cellToUpdate = regionCells[i];
+            cellToUpdate->resourceID = availableResources[i];
+            cellToUpdate->productionRate = randProduction(rng);
+        }
+    }
+
+    // 4. Save the final resource map to a file.
+    string resource_path = "data/resources.txt";
+    ofstream fout(resource_path);
+    if (fout) {
+        // A header makes the file easier to understand later.
+        fout << "# row col resource_id production_rate\n";
+        for (const Cell& cell : cells) {
+            if (cell.resourceID != 0) {
+                fout << cell.row << " " << cell.col << " " << cell.resourceID << " " << cell.productionRate << "\n";
+            }
+        }
+        fout.close();
+        cout << "Resource map saved to " << resource_path << "\n";
+    } else {
+        cerr << "Error: Could not open " << resource_path << " for writing.\n";
+    }
+
 
     // All derived units based on your specifications
     vector<derivedUnit> allUnits = {
@@ -311,6 +347,12 @@ void distributeResource(vector<Cell>& cells) {
         {132, "shock_trooper_unit", 180, 55, {{1, 25}, {2, 35}, {3, 5}}, {{101, 1}, {121, 1}}, 5}
     };
 
+    // Create a lookup map for unit IDs to names for efficient access.
+    unordered_map<int, string> unitIdToName;
+    for (const auto& unit : allUnits) {
+        unitIdToName[unit.id] = unit.name;
+    }
+
     // Print all derived units
     cout << "\n=== ALL DERIVED UNITS ===" << endl;
     for (const auto& unit : allUnits) {
@@ -325,62 +367,165 @@ void distributeResource(vector<Cell>& cells) {
             first = false;
         }
         
+        
         if (!unit.derivedUnitsNeeded.empty()) {
+        // if there are prerequisites, print label first
             cout << " | Prerequisites: ";
-            first = true;
-            for (const auto& [reqId, qty] : unit.derivedUnitsNeeded) {
-                if (!first) cout << ", ";
-                // Find the unit name by ID
-                auto it = find_if(allUnits.begin(), allUnits.end(), 
-                                [reqId](const derivedUnit& u) { return u.id == reqId; });
-                if (it != allUnits.end()) {
-                    cout << it->name << "(" << qty << ")";
+
+            bool first = true; // used to control comma formatting
+            for (const auto& [reqId, quantity] : unit.derivedUnitsNeeded) {
+                if (!first) {
+                    cout << ", ";
                 }
+
+                // Use the efficient lookup map.
+                if (unitIdToName.count(reqId)) {
+                    cout << unitIdToName.at(reqId) << "(" << quantity << ")";
+                } else {
+                    // Fallback in case unit is not found (defensive)
+                    cout << "UnknownUnit(" << quantity << ")";
+                }
+
+            // after first element is printed, set flag so next iterations add comma
                 first = false;
             }
         }
-        cout << endl;
+            cout << endl;
     }
+    }
+    cout << " resources have already been distributed \n\n\n\n\n\n\n";
 }
 
+int askUserForRegion(const unordered_map<int,string>& regionNames){
+	std::cout << "\n=== SELECT YOUR STARTING REGION ===\n";
+	// list all regions
+	for (const auto& [id,name] : regionNames){
+		cout << "[" << id << "] " << name << "\n";
+	}
+	int choice;
+	std::cout << "\nEnter region ID: \n";
+	cin >> choice;
 
+	if (regionNames.count(choice)) {
+		return choice;
+	}
+	else {
+		cerr << "Invalid region ID!\n";
+		return -1;
+	}
+}
+
+bool saveProfile(const string& path,int regionID, const string& regionName){
+	ofstream fout(path);
+	if (!fout) return false;
+
+	fout << "starting_region_id: " << regionID << "\n";
+	fout << "starting_region_name: " << regionName << endl;
+	fout << "turns: 0"<<endl;
+
+	fout.close();
+	return true;
+}
+
+void gameStart(const string& profile_path){
+	ifstream fin(profile_path);
+	if (!fin){
+		cerr << "error: could not open profile file\n";
+		return;
+	}
+
+	int regionID = -1;
+	string regionName;
+	int turns = -1;
+	string line;
+
+	while (getline(fin,line)){
+		if (line.find("starting_region_id:") != string::npos) {
+			regionID = stoi(line.substr(line.find(":") + 1));
+		}
+		else if (line.find("starting_region_name:") != string::npos){
+			regionName = line.substr(line.find(":") + 1);
+		}
+		else if (line.find("turns:") != string::npos){
+			turns = stoi(line.substr(line.find(":") + 1));
+		}
+	}
+	
+	if (regionID != -1 && !regionName.empty() && turns != -1){
+		std::cout << "\n=== WELCOME TO THE GAME ===\n";
+		std::cout << "Your starting region ID: " << regionID << "\n";
+		std::cout << "Your starting region name: " <<  regionName << "\n";
+		std::cout << " Current turn: " << turns << "\n\n";
+	}
+	else{
+		cerr << "Error : corrupted profile fata \n";
+	}
+}
 
 int main() {
     std::filesystem::create_directories("data");
     string map_path = "data/map.txt";
+    string profile_path = "data/profile.txt";
+    if (!mapExists(profile_path)){
+            if (!mapExists(map_path)) {
+            cout << "no map found... entering creation loop\n";
+            int rows, cols;
+            cout << "map size? (rows cols): ";
+            cin >> rows >> cols;
 
-    if (!mapExists(map_path)) {
-        cout << "no map found... entering creation loop\n";
-        int rows, cols;
-        cout << "map size? (rows cols): ";
-        cin >> rows >> cols;
+            while (true) {
+                auto [grid, regionNames] = makeRegion(rows, cols);
+                printRegionInfo(grid, regionNames);
+                printMap(grid);
 
-        while (true) {
-            auto [grid, regionNames] = makeRegion(rows, cols);
-            printRegionInfo(grid, regionNames);
-            printMap(grid);
-
-            if (askUserSatisfied()) {
-                if (saveMap(map_path, grid, regionNames)) {
-                    cout << "map saved to " << map_path << "\n";
-                    break;
-                } else {
-                    cerr << "failed to save map!\n";
+                if (askUserSatisfied()) {
+                    if (saveMap(map_path, grid, regionNames)) {
+                        cout << "map saved to " << map_path << "\n";
+                        break;
+                    } else {
+                        cerr << "failed to save map!\n";
+                    }
                 }
+                cout << "\n--- remaking map ---\n";
             }
-            cout << "\n--- remaking map ---\n";
+        } else {
+            int rows = 0, cols = 0;
+            vector<vector<int>> grid;
+            vector<Cell> cells;
+
+            cout << "map found... loading\n";
+            if (loadMap(map_path, rows, cols, grid, cells)) {
+                cout << "Map loaded successfully.\n";
+                printMap(grid);
+                distributeResource(cells);
+                unordered_map<int, string> regionNames;
+                for (const Cell& cell : cells){
+                if (cell.regionID != 0 && !regionNames.count(cell.regionID)) {
+                    regionNames[cell.regionID] = cell.regionName;	
+                }
+                }
+
+                int chosenRegion = askUserForRegion(regionNames);
+                if (chosenRegion != -1 ){
+                string profilePath = "data/profile.txt";
+                if (saveProfile(profilePath, chosenRegion, regionNames.at(chosenRegion))){
+                    std::cout << " Profile saved to " << profilePath << "\n";
+                }
+                else{
+                    cerr << "Failed to save profile \n" << endl;
+                }
+                    }
+            } else {
+                cerr << "Failed to load map. Please check or delete the map file and restart.\n";
+                return 1; // Exit with an error code
+            }
         }
-    } else {
-        int rows = 0, cols = 0;
-        vector<vector<int>> grid;
-        vector<Cell> cells;
-
-        cout << "map found... loading\n";
-        loadMap(map_path, rows, cols, grid, cells);
-
-        distributeResource(cells);
     }
+    else {
+       gameStart(profile_path); 
+    }
+
+
 
     return 0;
 }
-

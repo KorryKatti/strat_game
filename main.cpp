@@ -700,6 +700,68 @@ void gameStart(const string& profile_path, const string& map_path, const string&
     }
 }
 
+struct Construction{
+	int id;
+	string name;
+	int remainingTurns;
+	int row;
+	int col;
+};
+
+// global variables for uh game state yes
+vector<vector<bool>> constructionGrid; // cell busy tracker
+vector<Construction> ongoingConstructions;
+unordered_map<int,derivedUnit> unitDatabase; // store all buildable units
+
+void initializeDatabase(){
+	// honestly i fucking wish cpp has json support inbuilt like python
+	// all derived units added here
+	unitDatabase = {
+        {101, {101, "outpost", 500, 0, {{1, 10}, {2, 2}}, {}, 1}},
+
+        // Infantry units
+        {102, {102, "mercenaries", 100, 10, {{1, 2}}, {{101, 1}}, 3}},
+        {103, {103, "police", 120, 15, {{2, 5}}, {{101, 1}}, 4}},
+        {104, {104, "light_army_personnel", 150, 20, {{1, 5}, {2, 5}}, {{101, 1}}, 5}},
+        {105, {105, "medium_army_personnel", 200, 30, {{1, 8}, {2, 8}}, {{101, 1}}, 5}},
+        {106, {106, "large_army_personnel", 280, 45, {{1, 10}, {2, 10}, {3, 1}}, {{101, 1}}, 8}},
+
+        // Vehicle infrastructure and units
+        {107, {107, "garage", 400, 0, {{1, 12}, {2, 15}}, {{101, 1}}, 2}},
+        {108, {108, "pickup_truck", 80, 12, {{1, 20}, {2, 12}}, {{107, 1}}, 3}},
+        {109, {109, "light_tank", 300, 60, {{1, 30}, {2, 20}}, {{107, 1}, {108, 10}}, 2}},
+        {110, {110, "heavy_tank", 500, 100, {{1, 45}, {2, 50}}, {{107, 1}, {108, 25}}, 5}},
+
+        // Air defense and aviation
+        {111, {111, "anti_air", 250, 40, {{1, 20}, {2, 10}}, {{107, 1}, {109, 1}, {104, 10}}, 4}},
+        {112, {112, "airbase", 800, 0, {{1, 50}, {2, 50}, {3, 3}}, {{107, 1}, {111, 1}}, 8}},
+        {113, {113, "a2a_plane", 200, 80, {{1, 60}, {2, 60}}, {{112, 1}}, 5}},
+        {114, {114, "small_bomber_plane", 250, 120, {{1, 70}, {2, 60}}, {{112, 1}}, 5}},
+        {115, {115, "super_bomber_plane", 400, 200, {{1, 100}, {2, 80}, {3, 7}}, {{112, 1}, {114, 1}}, 7}},
+
+        // Missiles and WMDs
+        {116, {116, "rocket", 100, 50, {{1, 20}, {2, 10}, {3, 1}}, {{112, 1}}, 2}},
+        {117, {117, "missile", 150, 100, {{1, 40}, {2, 25}, {4, 10}}, {{112, 1}, {116, 1}}, 10}},
+        {118, {118, "nuke", 300, 2000, {{1, 1000}, {2, 999}, {4, 100}, {5, 500}}, {{112, 1}, {115, 2}, {106, 10}, {117, 10}}, 34}},
+
+        // Extended units
+        {119, {119, "artillery_battery", 350, 90, {{1, 60}, {2, 70}, {3, 5}}, {{107, 1}, {105, 10}}, 6}},
+        {120, {120, "mobile_sam", 280, 45, {{1, 50}, {2, 40}, {3, 2}}, {{107, 1}, {109, 5}}, 5}},
+        {121, {121, "commando_squad", 80, 35, {{1, 20}, {2, 30}, {3, 3}}, {{101, 1}}, 4}},
+        {122, {122, "drone_swarm", 60, 25, {{1, 40}, {2, 25}, {3, 2}}, {{112, 1}}, 3}},
+        {123, {123, "heavy_mech", 700, 150, {{1, 80}, {2, 120}, {3, 10}}, {{107, 1}, {110, 3}}, 9}},
+        {124, {124, "fortified_bunker", 600, 10, {{1, 20}, {2, 50}}, {{101, 1}}, 4}},
+        {125, {125, "mobile_hq", 450, 5, {{1, 90}, {2, 80}, {3, 5}}, {{101, 1}, {107, 1}}, 7}},
+        {126, {126, "orbital_strike_sat", 200, 300, {{1, 200}, {2, 150}, {3, 10}, {4, 50}}, {{112, 1}}, 12}},
+        {127, {127, "chemical_warhead", 120, 150, {{1, 80}, {2, 50}, {4, 20}}, {{112, 1}, {116, 2}}, 8}},
+        {128, {128, "emp_generator", 300, 0, {{1, 60}, {2, 70}, {4, 15}}, {{112, 1}, {111, 1}}, 9}},
+        {129, {129, "armored_truck", 150, 20, {{1, 40}, {2, 45}}, {{107, 1}, {108, 5}}, 3}},
+        {130, {130, "railgun_platform", 400, 250, {{1, 150}, {2, 200}, {3, 15}}, {{107, 1}, {112, 1}}, 14}},
+        {131, {131, "stealth_bomber", 280, 140, {{1, 120}, {2, 100}, {3, 5}}, {{112, 1}, {114, 1}}, 7}},
+        {132, {132, "shock_trooper_unit", 180, 55, {{1, 25}, {2, 35}, {3, 5}}, {{101, 1}, {121, 1}}, 5}}
+    };
+
+}
 
 int main() {
     std::filesystem::create_directories("data");
@@ -748,7 +810,15 @@ int main() {
                 int chosenRegion = askUserForRegion(regionNames);
                 if (chosenRegion != -1 ){
                 string profilePath = "data/profile.txt";
-                if (saveProfile(profilePath, chosenRegion, regionNames.at(chosenRegion))){
+
+		// giving some initial resource should be a good idea;
+		PlayerResources startingResources;
+		startingResources.oil = 90;
+		startingResources.metal = 60;
+		startingResources.gold = 30;
+		startingResources.rare_earth = 0;
+		startingResources.uranium = 1;
+                if (saveProfile(profilePath, chosenRegion, regionNames.at(chosenRegion),startingResources)){
                     std::cout << " Profile saved to " << profilePath << "\n";
                 }
                 else{
@@ -764,8 +834,5 @@ int main() {
     else {
        gameStart(profile_path,map_path,resources_path); 
     }
-
-
-
     return 0;
 }

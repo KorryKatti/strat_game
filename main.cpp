@@ -760,7 +760,125 @@ void initializeDatabase(){
         {131, {131, "stealth_bomber", 280, 140, {{1, 120}, {2, 100}, {3, 5}}, {{112, 1}, {114, 1}}, 7}},
         {132, {132, "shock_trooper_unit", 180, 55, {{1, 25}, {2, 35}, {3, 5}}, {{101, 1}, {121, 1}}, 5}}
     };
+}
 
+bool canAffordConstruction(const PlayerResources& resources, const derivedUnit& unit) {
+	for (const auto& [resId,amount] : unit.primaryResourcesNeeded){
+		switch (resId) {
+			case 1: if (resources.oil < amount) return false;break;
+			case 2: if (resources.metal < amount) return false;break;
+			case 3: if (resources.gold < amount) return false;break;
+			case 4: if (resources.rare_earth < amount) return false;break;
+			case 5: if (resources.uranium < amount) return false;break;
+		}
+	}
+	return true;
+}
+
+void deductResources(PlayerResources& resources,const derivedUnit& unit){
+	for (const auto [resId,amount] : unit.primaryResourcesNeeded){
+		switch(resId) {
+			case 1: resources.oil -= amount;break;
+			case 2: resources.metal -= amount; break;
+			case 3: resources.gold -= amount; break;
+			case 4: resources.rare_earth -= amount; break;
+			case 5:resources.uranium-=amount;break; // i know what i did
+		}	
+	}
+}
+
+bool saveResources(const string& path, const PlayerResources& resources) {
+	ifstream fin(path);
+	if (!fin) return false;
+
+	// read all existing data
+	unordered_map<string,string> allData;
+	string line;
+	while (getline(fin,line)){
+		size_t colon = line.find(":");
+		if (colon != string::npos) {
+			allData[line.substr(0,colon)] = line.substr(colon + 1);
+		}
+	}
+	fin.close();
+
+	allData["oil"] = to_string(resources.oil);
+	allData["metal"] = to_string(resources.metal);
+	allData["gold"] = to_string(resources.gold);
+	allData["rare_earth"] = to_string(resources.rare_earth);
+	allData["uranium"] = to_string(resources.uranium);
+
+	// fucking writing backing toing filing
+	ofstream fout(path);
+	if (!fout) return false; // there is a mosquito on my thigh rn and i am letting it bite me to see my pain tolerance , it sure does itch a bit
+	
+	for (const auto& [key,value] : allData){
+		fout << key << ":" << value << "\n";
+	}
+	fout.close();
+	return true;
+}
+
+bool startConstruction(int unitId, int row, int col, const string& profile_path){
+	// check if cell isn't busy
+	if (constructionGrid[row][col]){
+		cout << "can't have more than one construction happening at once\n";
+		return false;
+	}
+	// load current resources
+	PlayerResources resources = loadResources(profile_path);
+
+	// Checking for existence of unit
+	if (!unitDatabase.count(unitId)){
+		cout << "Invalid unit ID!\n";
+		return false;
+	}
+
+	derivedUnit unit = unitDatabase[unitId];
+
+	// check requirements of said resource
+	if (!canAffordConstruction(resources,unit)){
+		std::cout << "Not enough resources for this construction" << std::endl;
+		return false;
+	}
+
+	// deduct resources and save
+	deductResources(resources, unit);
+	if (!saveResources(profile_path,resources)){
+		std::cerr << " failed to save resources after deduction " << std::endl;
+		return false;
+	}
+
+	// start construction
+	constructionGrid[row][col] = true;
+	ongoingConstructions.push_back({
+		unitId,
+		unit.name,
+		unit.buildTime,
+		row,
+		col
+	});
+
+	std::cout << " started construction of " << unit.name << " at )" << row << "," << col<<"). will complete in " << unit.buildTime << " turns.\n";
+	return true;
+}
+
+void updateConstructions(const string& profile_path) {
+	for (auto it = ongoingConstructions.begin(); it != ongoingConstructions.end(); ){
+		it->remainingTurns--;
+
+		if (it->remainingTurns <= 0){
+			std::cout << "Construction of "<< it->name << " completed at (" << it->row << "," << it->col << ")\n";
+			constructionGrid[it->row][it->col] = false;
+			it = ongoingConstructions.erase(it);
+		} else {
+			++it;
+		}
+	}
+}
+
+void buildingMenu(const string& profile_path, const string& map_path){
+	
 }
 
 int main() {

@@ -415,56 +415,296 @@ int askUserForRegion(const unordered_map<int,string>& regionNames){
 	}
 }
 
-bool saveProfile(const string& path,int regionID, const string& regionName){
+struct PlayerResources {
+	int oil = 0;
+	int metal = 0;
+	int gold = 0;
+	int rare_earth = 0;
+	int uranium = 0;
+};
+
+bool saveProfile(const string& path,int regionID, const string& regionName, const PlayerResources& resources){
 	ofstream fout(path);
 	if (!fout) return false;
 
 	fout << "starting_region_id: " << regionID << "\n";
 	fout << "starting_region_name: " << regionName << endl;
-	fout << "turns: 0"<<endl;
+	fout << "turns: 0\n";
+	fout << "oil: " << resources.oil << "\n";
+	fout << "metal: " << resources.metal << "\n";
+	fout << "gold: " << resources.gold << "\n";
+	fout << "rare_earth: " << resources.rare_earth << "\n";
+	fout << "uranium: " << resources.uranium << "\n";
 
 	fout.close();
 	return true;
 }
 
-void gameStart(const string& profile_path){
+// function to load player resources from file
+PlayerResources loadResources(const string& profile_path) {
+	PlayerResources resources;
 	ifstream fin(profile_path);
-	if (!fin){
-		cerr << "error: could not open profile file\n";
-		return;
+	if (!fin) return resources;
+
+	string line;
+	while (getline(fin,line)){
+		if (line.find("oil:") != string::npos){
+			resources.oil = stoi(line.substr(line.find(":")+1));
+		}
+		else if (line.find("metal:") != string::npos){
+			resources.metal = stoi(line.substr(line.find(":")+1));
+		}
+		else if (line.find("gold:") != string::npos){
+			resources.gold = stoi(line.substr(line.find(":")+1));
+		}
+		else if (line.find("rare_earth:") != string::npos){
+			resources.rare_earth = stoi(line.substr(line.find(":")+1));
+		}
+		else if (line.find("uranium:") != string::npos){
+			resources.uranium = stoi(line.substr(line.find(":")+1));
+		}
 	}
+	return resources;
+}
+
+// function to calculate production rates for a region
+// i am tired boss
+
+PlayerResources calculateProduction(int regionID, const string& map_path, const string& resources_path) {
+	PlayerResources production;
+	ifstream res_file(resources_path);
+	if (!res_file) return production;
+
+	// loading the map data
+	int rows,cols;
+	vector<vector<int>> grid;
+	vector<Cell> cells;
+	// all this for a project i can't even actually show on my resume :wilted_rose:
+	if (!loadMap(map_path,rows,cols,grid,cells)){
+		return production;
+	}
+
+	string line;
+	while (getline(res_file,line)){
+		if (line.empty() || line[0] == '#' ) continue;
+
+		istringstream iss(line);
+		int row,col,resID,prodRate;
+		if (iss >> row >> col >> resID >> prodRate){
+			if (grid[row][col] == regionID) {
+				switch(resID) {
+					case 1: production.oil += prodRate; break;
+					case 2: production.metal += prodRate; break;
+					case 3: production.gold += prodRate; break;
+					case 4: production.rare_earth += prodRate; break;
+					case 5: production.uranium += prodRate; break;
+				}
+			} 
+		}
+	}
+	return production;
+}
+
+// fucktion to adance turn and update resoses;
+bool advanceTurn(const string& profile_path, const string& map_path, const string& resources_path) {
+	// load current game state
+	ifstream fin(profile_path);
+	if (!fin) return false;
 
 	int regionID = -1;
-	string regionName;
-	int turns = -1;
-	string line;
+	int turns = 0;
+	PlayerResources current;
+	unordered_map<string,string> otherData;
 
-	while (getline(fin,line)){
-		if (line.find("starting_region_id:") != string::npos) {
-			regionID = stoi(line.substr(line.find(":") + 1));
-		}
-		else if (line.find("starting_region_name:") != string::npos){
-			regionName = line.substr(line.find(":") + 1);
+	string line;
+	while (getline(fin,line)) {
+		if (line.find("starting_region_id:") != string::npos){
+			regionID = stoi(line.substr(line.find(":")+1));
 		}
 		else if (line.find("turns:") != string::npos){
-			turns = stoi(line.substr(line.find(":") + 1));
+			turns = stoi(line.substr(line.find(":")+1));
+		}
+		else if (line.find("oil:") != string::npos){
+			current.oil = stoi(line.substr(line.find(":")+1));
+		}
+		else if (line.find("metal:")!= string::npos){
+			current.metal = stoi(line.substr(line.find(":")+1));
+		}
+		else if (line.find("gold:") != string::npos){
+			current.gold = stoi(line.substr(line.find(":")+1));
+		}
+		else if (line.find("rare_earth:") != string::npos){
+			current.rare_earth = stoi(line.substr(line.find(":")+1));
+		}
+		else if (line.find("uranium:") != string::npos){
+			current.uranium = stoi(line.substr(line.find(":")+1));
+		}
+		// this is something i was told to do , i would heave nevere done this honestrlty
+		else {
+			// store other data to preserve
+			size_t colon = line.find(":");
+			if (colon != string::npos) {
+				otherData[line.substr(0,colon)] = line.substr(colon+1);
+			}
 		}
 	}
+	fin.close();
+
+	if (regionID == -1) return false;
+
+	// calculate production and update resources
+	PlayerResources production = calculateProduction(regionID, map_path, resources_path);
+	current.oil += production.oil;
+	current.metal += production.metal;
+	current.gold += production.gold;
+	current.rare_earth += production.rare_earth;
+	current.uranium += production.uranium;
+	turns++;
 	
-	if (regionID != -1 && !regionName.empty() && turns != -1){
-		std::cout << "\n=== WELCOME TO THE GAME ===\n";
-		std::cout << "Your starting region ID: " << regionID << "\n";
-		std::cout << "Your starting region name: " <<  regionName << "\n";
-		std::cout << " Current turn: " << turns << "\n\n";
-	}
-	else{
-		cerr << "Error : corrupted profile fata \n";
-	}
+	// save he updaed state
+	ofstream fout(profile_path);
+	if (!fout) return false;
+
+	fout << "starting_region_id: " << regionID << "\n";
+	for (const auto& [key, value] : otherData) {
+		if (key != "turns" && key != "oil" && key != "metal" && 
+        	key != "gold" && key != "rare_earth" && key != "uranium") {
+        	fout << key << ":" << value << "\n";
+		}
+    	}
+    	fout << "turns: " << turns << "\n";
+    	fout << "oil: " << current.oil << "\n";
+    	fout << "metal: " << current.metal << "\n";
+    	fout << "gold: " << current.gold << "\n";
+    	fout << "rare_earth: " << current.rare_earth << "\n";
+    	fout << "uranium: " << current.uranium << "\n";
+
+    	fout.close();
+    	return true;
 }
+
+
+
+
+void printRegionResources(int regionID, const string& map_path, const string& resources_path) {
+    // Load map data to get all cells in the region
+    int rows, cols;
+    vector<vector<int>> grid;
+    vector<Cell> cells;
+    
+    if (!loadMap(map_path, rows, cols, grid, cells)) {
+        cerr << "Failed to load map data\n";
+        return;
+    }
+
+    // Load resources data
+    ifstream res_file(resources_path);
+    if (!res_file) {
+        cerr << "Failed to open resources file\n";
+        return;
+    }
+
+    // Map of resource IDs to names
+    unordered_map<int, string> resourceNames = {
+        {1, "Oil"},         
+        {2, "Metal"},       
+        {3, "Gold"},        
+        {4, "Rare Earth"},  
+        {5, "Uranium"}      
+    };
+
+    // Store resources in this region
+    unordered_map<int, pair<string, int>> regionResources; // resourceID -> (name, total production)
+
+    // Skip header line if exists
+    string line;
+    while (getline(res_file, line)) {
+        if (line.empty() || line[0] == '#') continue;
+
+        istringstream iss(line);
+        int row, col, resID, production;
+        if (iss >> row >> col >> resID >> production) {
+            // Check if this cell belongs to player's region
+            if (grid[row][col] == regionID) {
+                string resName = resourceNames.count(resID) ? resourceNames[resID] : "Unknown";
+                regionResources[resID].first = resName;
+                regionResources[resID].second += production;
+            }
+        }
+    }
+
+    // Print the resources
+    if (regionResources.empty()) {
+        cout << "No resources found in your region\n";
+    } else {
+        cout << "\n=== REGION RESOURCES ===\n";
+        for (const auto& [id, data] : regionResources) {
+            cout << "- " << data.first << ": " << data.second << " units/turn\n";
+        }
+    }
+}
+
+void gameStart(const string& profile_path, const string& map_path, const string& resources_path) {
+    ifstream fin(profile_path);
+    if (!fin) {
+        cerr << "Error: Could not open profile file\n";
+        return;
+    }
+
+    int regionID = -1;
+    string regionName;
+    int turns = -1;
+    string line;
+    
+    while (getline(fin, line)) {
+        if (line.find("starting_region_id:") != string::npos) {
+            regionID = stoi(line.substr(line.find(":") + 1));
+        } else if (line.find("starting_region_name:") != string::npos) {
+            regionName = line.substr(line.find(":") + 1);
+        } else if (line.find("turns:") != string::npos) {
+            turns = stoi(line.substr(line.find(":") + 1));
+        }
+    }
+    
+    
+    if (regionID != -1 && !regionName.empty() && turns != -1) {
+        cout << "\n=== WELCOME TO THE GAME ===\n";
+        cout << "Your starting region ID: " << regionID << "\n";
+        cout << "Your starting region name: " << regionName << "\n";
+        cout << "Current turn: " << turns << "\n\n";
+        
+        // Show current resources
+        PlayerResources resources = loadResources(profile_path);
+        cout << "=== CURRENT RESOURCES ===\n";
+        cout << "Oil: " << resources.oil << "\n";
+        cout << "Metal: " << resources.metal << "\n";
+        cout << "Gold: " << resources.gold << "\n";
+        cout << "Rare Earth: " << resources.rare_earth << "\n";
+        cout << "Uranium: " << resources.uranium << "\n\n";
+        
+        // Show production rates
+        PlayerResources production = calculateProduction(regionID, map_path, resources_path);
+        cout << "=== PRODUCTION PER TURN ===\n";
+        cout << "Oil: +" << production.oil << "\n";
+        cout << "Metal: +" << production.metal << "\n";
+        cout << "Gold: +" << production.gold << "\n";
+        cout << "Rare Earth: +" << production.rare_earth << "\n";
+        cout << "Uranium: +" << production.uranium << "\n\n";
+
+ // Print region resources
+        printRegionResources(regionID, map_path, resources_path);
+    }
+        
+    else {
+        cerr << "Error: Corrupted profile data\n";
+    }
+}
+
 
 int main() {
     std::filesystem::create_directories("data");
     string map_path = "data/map.txt";
+    string resources_path = "data/resources.txt";
     string profile_path = "data/profile.txt";
     if (!mapExists(profile_path)){
             if (!mapExists(map_path)) {
@@ -522,7 +762,7 @@ int main() {
         }
     }
     else {
-       gameStart(profile_path); 
+       gameStart(profile_path,map_path,resources_path); 
     }
 
 

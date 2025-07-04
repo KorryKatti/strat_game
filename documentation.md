@@ -1,6 +1,6 @@
 # Strategy Game Map Generator & Resource System
 
-This C++ program generates, displays, and saves a 2D game map composed of distinct, named regions. If a map file already exists, it loads the map data and displays a catalog of available in-game units.
+This C++ program generates, displays, and saves a 2D game map composed of distinct, named regions. It also manages player profiles, resource production, and a turn-based game system.
 
 ## How to Compile and Run
 
@@ -19,53 +19,65 @@ To run the compiled program:
 ## Program Flow
 
 1.  **Directory Creation**: On startup, the program ensures a `data/` directory exists.
-2.  **Map Check**: It checks for the existence of `data/map.txt`.
-    *   **If `data/map.txt` is not found**:
-        *   It prompts the user for the desired map dimensions (rows and columns).
-        *   It enters a loop to generate a new map (`makeRegion`).
-        *   It displays the generated map (`printMap`) and a list of its regions (`printRegionInfo`).
-        *   It asks the user if they are satisfied with the map.
-        *   If the user is satisfied, it saves the map to `data/map.txt` (`saveMap`) and exits the loop.
-        *   If not, it regenerates the map.
-    *   **If `data/map.txt` is found**:
-        *   It loads the map data from the file (`loadMap`), populating the grid and a vector of `Cell` objects.
-        *   It then calls `distributeResource`, which defines and displays a comprehensive list of all available military units, their stats, and their build requirements (resources and prerequisite units).
+2.  **Profile Check**: It checks for `data/profile.txt`.
+    *   **If `data/profile.txt` is not found**:
+        *   It checks for `data/map.txt`.
+            *   **If `data/map.txt` is not found**: It enters a map creation loop, prompting the user for dimensions, generating a map, and saving it once the user is satisfied.
+            *   **If `data/map.txt` is found**: It loads the map, distributes resources randomly across the map cells, and saves this to `data/resources.txt`. It then prompts the user to select a starting region.
+        *   A new `profile.txt` is created, storing the chosen region, initial resources (all zero), and setting the turn count to 0.
+    *   **If `data/profile.txt` is found**:
+        *   The game starts by loading the player's profile, including their region, current resources, and turn number.
+        *   It displays the current game state: resources, production rates, and a list of resources in the player's region.
+        *   The program will then be ready to advance to the next turn (this part of the logic is not yet fully implemented in `main`).
 
 ## Core Functions
 
 -   `main()`: The main entry point that orchestrates the program flow.
--   `makeRegion(rows, cols)`: Generates a grid and populates it with randomly sized and positioned rectangular regions. Each region is assigned a unique ID and a random name from a predefined list.
--   `loadMap(...)`: Reads map dimensions, grid data, and region names from `data/map.txt`. It uses this data to populate the game's grid and a `vector<Cell>` containing detailed information for each cell.
--   `saveMap(...)`: Writes the current map grid and region names to `data/map.txt`.
--   `printMap(grid)`: Renders a color-coded ASCII representation of the map in the console.
--   `printRegionInfo(...)`: Displays a summary of each region, including its ID, name, position, and size.
--   `distributeResource(cells)`: This function initializes data for the game's economy and military. It defines a list of primary resources (e.g., oil, metal) and a detailed catalog of `derivedUnit` structures. Each unit has stats (health, damage), build time, and resource/unit prerequisites. The function's current implementation prints this entire catalog to the console for review; it does not yet assign resources or units to the map itself.
+-   `makeRegion(rows, cols)`: Generates a grid with random rectangular regions.
+-   `loadMap(...)`: Reads map data from `data/map.txt`.
+-   `saveMap(...)`: Writes the map grid and region names to `data/map.txt`.
+-   `printMap(grid)`: Renders a color-coded ASCII map.
+-   `printRegionInfo(...)`: Displays a summary of each region.
+-   `distributeResource(cells)`: Assigns primary resources with random production rates to cells within each region and saves this to `data/resources.txt`. It also prints a catalog of all buildable units.
+-   `askUserForRegion(...)`: Prompts the user to select a starting region from the list of available regions.
+-   `saveProfile(...)`: Creates or updates `data/profile.txt` with the player's current game state.
+-   `loadResources(...)`: Reads the player's current resource totals from `data/profile.txt`.
+-   `calculateProduction(...)`: Calculates the total resource production per turn for a specific region by reading `data/resources.txt`.
+-   `advanceTurn(...)`: Loads the current profile, calculates and adds the next turn's resource production, increments the turn counter, and saves the updated profile.
+-   `printRegionResources(...)`: Displays a summary of the resources and their production rates for the player's chosen region.
+-   `gameStart(...)`: Loads an existing game from `data/profile.txt` and displays the player's current status.
 
 ## Data Structures
 
--   `struct Cell`: Represents a single cell on the map, containing its row, column, region ID, and the corresponding region name.
--   `struct derivedUnit`: Represents a military or infrastructure unit that can be built. It includes:
-    *   `id`: A unique identifier.
-    *   `name`: The unit's name.
-    *   `health`, `damage`, `buildTime`: Core stats for the unit.
-    *   `primaryResourcesNeeded`: A map of required primary resource IDs and the quantity needed.
-    *   `derivedUnitsNeeded`: A map of required prerequisite unit IDs and the quantity needed, establishing a tech tree.
+-   `struct Cell`: Represents a single cell on the map.
+-   `struct derivedUnit`: Represents a buildable unit with stats and requirements.
+-   `struct PlayerResources`: Holds the player's current totals for each primary resource.
 
-## Map File Format (`data/map.txt`)
+## File Formats
 
-The map data is stored in a simple text format:
+### `data/map.txt`
 
-1.  The first line contains the map dimensions: `rows cols`.
-2.  The next `rows` lines contain the grid data, with each integer being a region ID, separated by spaces.
-3.  The remaining lines define the region names in the format `id:name`.
+1.  `rows cols`
+2.  Grid data (region IDs)
+3.  `id:name` for each region
 
-**Example `data/map.txt`:**
-```
-10 20
-0 0 1 1 0 0 ...
-0 0 1 1 0 0 ...
-...
-1:zeta
-2:gamma
-...
-```
+### `data/resources.txt`
+
+A text file where each line represents a resource-producing cell.
+-   Format: `row col resource_id production_rate`
+-   Example: `5 10 1 15` (Cell at (5,10) produces 15 units of resource 1 per turn).
+
+### `data/profile.txt`
+
+A key-value store for the player's game state.
+-   Example:
+    ```
+    starting_region_id: 3
+    starting_region_name: helix
+    turns: 0
+    oil: 0
+    metal: 0
+    gold: 0
+    rare_earth: 0
+    uranium: 0
+    ```

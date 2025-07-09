@@ -13,9 +13,23 @@ struct Cell {
         int productionRate;
 	};
 
+// Forward declarations
+void updateConstructions(const string& profile_path);
+void showBuildableLocations(const vector<vector<int>>& grid, const vector<vector<bool>>& constructionGrid, int regionID);
+
 // create an empty grid of 0s
 vector<vector<int>> createGrid(int rows, int cols) {
     return vector<vector<int>>(rows, vector<int>(cols, 0));
+}
+
+// because the output was too long vertically it was hard to do any actual work on it
+// hence this function is to fix it by displaying content aligned horizontally
+void clearScreen() {
+	#ifdef _WIN32
+		system("cls");
+	#else
+		system("clear");
+	#endif
 }
 
 // check if a rectangular area is unoccupied
@@ -505,6 +519,7 @@ PlayerResources calculateProduction(int regionID, const string& map_path, const 
 	return production;
 }
 
+
 // fucktion to adance turn and update resoses;
 bool advanceTurn(const string& profile_path, const string& map_path, const string& resources_path) {
 	// load current game state
@@ -580,6 +595,7 @@ bool advanceTurn(const string& profile_path, const string& map_path, const strin
     	fout << "uranium: " << current.uranium << "\n";
 
     	fout.close();
+        updateConstructions(profile_path);
     	return true;
 }
 
@@ -877,8 +893,212 @@ void updateConstructions(const string& profile_path) {
 	}
 }
 
-void buildingMenu(const string& profile_path, const string& map_path){
+
+
+// pretty self explanatory
+vector<pair<int,int>> getPlayerCells(int regionID,const vector<vector<int>>& grid){
+	vector<pair<int,int>> ownedCells;
+	for (int r=0;r<grid.size();++r){
+		for (int c=0;c<grid[0].size();++c){
+			if (grid[r][c] == regionID) {
+				ownedCells.emplace_back(r,c);
+			}
+		}
+	}
+	return ownedCells;
+}
+
+void showBuildableLocations(const vector<vector<int>>& grid, const vector<vector<bool>>& constructionGrid, int regionID) {
+	std::cout << "\n=== BUILDABLE LOCATIONS ===\n";
+	std::cout << " Your region cells marked with [X], available build spots with [ ]\n";
+
+	for (int r=0;r<grid.size();++r){
+		for (int c=0;c<grid[0].size();++c){
+			if (grid[r][c] == regionID){
+				if (constructionGrid[r][c]){
+					std::cout << "[X]"; // building exists alraey
+				} else {
+					cout << "[ ]"; // available spot
+				}
+			} else if (grid[r][c] == 0){
+				cout << " . "; // unowned land
+			} else {
+				cout << " # ";
+			}
+		}
+		cout << " " << r << endl; // show row number
+	}
+
+	// print column numbers
+	cout << " ";
+	for (int c=0;c<grid[0].size();++c){
+		std::cout << " " << c << " ";
+	}
+	std::cout << std::endl;
+}
+
+void showCompactBuildMenu(const vector<vector<int>>& grid,const vector<vector<bool>>& constructionGrid, int regionID, const unordered_map<int, derivedUnit>& unitDatabase, const PlayerResources& resources) {
+	clearScreen();
 	
+	// calculating terminal dimensions
+	const int terminalWidth = 80;
+	const int mapWidth = min(40,(int)grid[0].size()*3);// 3 chars per cell
+	
+	// show headedr
+	cout << "=== BUILD MENU ===" << string(terminalWidth - 16, ' ') << "=== RESOURCES ===\n";
+
+	// show map on left side 
+	for (int r = 0; r < grid.size() ; ++r){
+		// map row
+		for (int c = 0; c < grid[0].size(); ++c){
+			if (grid[r][c] == regionID) {
+				if (constructionGrid[r][c]) {
+					std::cout << "\033[31m[X]\033[0m";  // red to indicate bsy
+				} else {
+					cout << "\033[32m[ ]\033[0m"; // green for available
+				}
+			}
+			else if (grid[r][c] == 0){
+				cout << " . ";
+			}
+			else{
+				cout << " # ";
+			}
+		}
+		// resources and build options on right side
+		if (r==0) {
+			cout << "    Oil: " << resources.oil;
+		} else if ( r == 1){
+			cout << "    Metal: " << resources.metal;
+		} else if ( r == 2) {
+			cout << "    Gold: " << resources.gold;
+		} else if (r==3){
+			cout << "    Rare Earth: " << resources.rare_earth;
+		} else if (r==4){
+			cout << "    Uranium: " << resources.uranium;
+		} else if (r==6){
+			cout << "    BUILD OPTIONS:";
+		} else if (r==7){
+			cout << "    1-3: Basic Units";
+		} else if (r==8) {
+			cout <<"     4-6: Vehicles";
+		} else if(r== 9){
+			cout << "    7-9: Aircraft";
+		} else if(r==10){
+			cout << "    10: Cancel";
+		}
+		cout << endl;
+	}
+
+	cout << "\nCoordinates: ";
+	for (int c = 0; c < min(10,(int)grid[0].size()); ++c) {
+		cout << c << " ";
+	}
+	if (grid[0].size() > 10) cout << "...";
+	cout << endl;
+}
+
+void buildingMenu(const string& profile_path, const string& map_path) {
+    // Load player region ID
+    ifstream fin(profile_path);
+    if (!fin) {
+        cerr << "Failed to load profile!\n";
+        return;
+    }
+    
+    int regionID = -1;
+    string line;
+    while (getline(fin, line)) {
+        if (line.find("starting_region_id:") != string::npos) {
+            regionID = stoi(line.substr(line.find(":") + 1));
+            break;
+        }
+    }
+    fin.close();
+    
+    if (regionID == -1) {
+        cerr << "Couldn't determine player region!\n";
+        return;
+    }
+    
+    // Load map data
+    int rows, cols;
+    vector<vector<int>> grid;
+    vector<Cell> cells;
+    if (!loadMap(map_path, rows, cols, grid, cells)) {
+        cerr << "Failed to load map!\n";
+        return;
+    }
+    
+    // Initialize construction grid if empty
+    if (constructionGrid.empty()) {
+        constructionGrid.resize(rows, vector<bool>(cols, false));
+    }
+    
+    // Load current resources
+    PlayerResources resources = loadResources(profile_path);
+    
+    while (true) {
+        showCompactBuildMenu(grid, constructionGrid, regionID, unitDatabase, resources);
+        
+        cout << "\nEnter choice (unit ID or 0 to cancel): ";
+        int unitId;
+        cin >> unitId;
+        
+        if (unitId == 0) break;
+        
+        if (!unitDatabase.count(unitId)) {
+            cout << "Invalid unit ID! Press enter to continue...";
+            cin.ignore();
+            cin.get();
+            continue;
+        }
+        
+        cout << "Enter coordinates (row col): ";
+        int row, col;
+        cin >> row >> col;
+        
+        if (row < 0 || row >= constructionGrid.size() || 
+            col < 0 || col >= constructionGrid[0].size()) {
+            cout << "Invalid coordinates! Press enter to continue...";
+            cin.ignore();
+            cin.get();
+            continue;
+        }
+        
+        if (grid[row][col] != regionID) {
+            cout << "You don't own this cell! Press enter to continue...";
+            cin.ignore();
+            cin.get();
+            continue;
+        }
+        
+        if (constructionGrid[row][col]) {
+            cout << "This cell already has a construction! Press enter to continue...";
+            cin.ignore();
+            cin.get();
+            continue;
+        }
+        
+        if (startConstruction(unitId, row, col, profile_path)) {
+            resources = loadResources(profile_path); // Refresh resources after building
+        }
+        
+        cout << "Press enter to continue...";
+        cin.ignore();
+        cin.get();
+	}
+}
+
+void showMainMenu(const PlayerResources& resources,int turns){
+	clearScreen();
+	cout << "=== MAIN MENU === Turn: "<< turns << "\n";
+	cout << "Resources - Oil: " << resources.oil << " | Metal: " << resources.metal << " | Gold: " << resources.gold << "\n";
+	cout << "	Rare Earth: " << resources.rare_earth << " | Uranium: " << resources.uranium << "\n\n";
+	cout << "1. Build\n";
+	cout << "2. Next turn\n";
+	cout << "3. Quit\n";
+	cout << "Enter choice: ";
 }
 
 int main() {
@@ -950,7 +1170,45 @@ int main() {
         }
     }
     else {
-       gameStart(profile_path,map_path,resources_path); 
+            PlayerResources resources = loadResources(profile_path);
+            int turns = 0;
+            
+            // Load current turn count
+            ifstream fin(profile_path);
+            string line;
+            while (getline(fin, line)) {
+                if (line.find("turns:") != string::npos) {
+                    turns = stoi(line.substr(line.find(":") + 1));
+                    break;
+                }
+            }
+            fin.close();
+            
+            showMainMenu(resources, turns);
+            
+            int choice;
+            cin >> choice;
+            
+            if (choice == 1) {
+                buildingMenu(profile_path, map_path);
+            } else if (choice == 2) {
+                if (advanceTurn(profile_path, map_path, resources_path)) {
+                    cout << "Turn advanced successfully! Press enter to continue...";
+                    cin.ignore();
+                    cin.get();
+                } else {
+                    cout << "Failed to advance turn! Press enter to continue...";
+                    cin.ignore();
+                    cin.get();
+                }
+            } else if (choice == 3) {
+                return 0;
+            } else {
+                cout << "Invalid choice! Press enter to continue...";
+                cin.ignore();
+                cin.get();
+            }
+        
     }
     return 0;
 }
